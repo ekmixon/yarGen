@@ -95,12 +95,10 @@ def get_files(dir, notRecursive):
             if os.path.isdir(filePath):
                 continue
             yield filePath
-    # Recursive
     else:
         for root, directories, files in scandir.walk(dir, followlinks=False):
             for filename in files:
-                filePath = os.path.join(root, filename)
-                yield filePath
+                yield os.path.join(root, filename)
 
 
 def parse_sample_dir(dir, notRecursive=False, generateInfo=False, onlyRelevantExtensions=False):
@@ -112,18 +110,20 @@ def parse_sample_dir(dir, notRecursive=False, generateInfo=False, onlyRelevantEx
 
     for filePath in get_files(dir, notRecursive):
         try:
-            print("[+] Processing %s ..." % filePath)
+            print(f"[+] Processing {filePath} ...")
 
             # Get Extension
             extension = os.path.splitext(filePath)[1].lower()
-            if not extension in RELEVANT_EXTENSIONS and onlyRelevantExtensions:
+            if extension not in RELEVANT_EXTENSIONS and onlyRelevantExtensions:
                 if args.debug:
-                    print("[-] EXTENSION %s - Skipping file %s" % (extension, filePath))
+                    print(f"[-] EXTENSION {extension} - Skipping file {filePath}")
                 continue
 
             # Info file check
-            if os.path.basename(filePath) == os.path.basename(args.b) or \
-                    os.path.basename(filePath) == os.path.basename(args.r):
+            if os.path.basename(filePath) in [
+                os.path.basename(args.b),
+                os.path.basename(args.r),
+            ]:
                 continue
 
             # Size Check
@@ -132,7 +132,10 @@ def parse_sample_dir(dir, notRecursive=False, generateInfo=False, onlyRelevantEx
                 size = os.stat(filePath).st_size
                 if size > (args.fs * 1024 * 1024):
                     if args.debug:
-                        print("[-] File is to big - Skipping file %s (use -fs to adjust this behaviour)" % (filePath))
+                        print(
+                            f"[-] File is to big - Skipping file {filePath} (use -fs to adjust this behaviour)"
+                        )
+
                     continue
             except Exception as e:
                 pass
@@ -142,7 +145,7 @@ def parse_sample_dir(dir, notRecursive=False, generateInfo=False, onlyRelevantEx
                 with open(filePath, 'rb') as f:
                     fileData = f.read()
             except Exception as e:
-                print("[-] Cannot read file - skipping %s" % filePath)
+                print(f"[-] Cannot read file - skipping {filePath}")
 
             # Extract strings from file
             strings = extract_strings(fileData)
@@ -150,29 +153,32 @@ def parse_sample_dir(dir, notRecursive=False, generateInfo=False, onlyRelevantEx
             # Extract opcodes from file
             opcodes = []
             if use_opcodes:
-                print("[-] Extracting OpCodes: %s" % filePath)
+                print(f"[-] Extracting OpCodes: {filePath}")
                 opcodes = extract_opcodes(fileData)
 
             # Add sha256 value
             if generateInfo:
                 sha256sum = sha256(fileData).hexdigest()
-                file_info[filePath] = {}
-                file_info[filePath]["hash"] = sha256sum
+                file_info[filePath] = {"hash": sha256sum}
                 file_info[filePath]["imphash"], file_info[filePath]["exports"] = get_pe_info(fileData)
 
             # Skip if hash already known - avoid duplicate files
             if sha256sum in known_sha1sums:
                 # if args.debug:
-                print("[-] Skipping strings/opcodes from %s due to MD5 duplicate detection" % filePath)
+                print(
+                    f"[-] Skipping strings/opcodes from {filePath} due to MD5 duplicate detection"
+                )
+
                 continue
             else:
                 known_sha1sums.append(sha256sum)
 
             # Magic evaluation
-            if not args.nomagic:
-                file_info[filePath]["magic"] = binascii.hexlify(fileData[:2]).decode('ascii')
-            else:
-                file_info[filePath]["magic"] = ""
+            file_info[filePath]["magic"] = (
+                ""
+                if args.nomagic
+                else binascii.hexlify(fileData[:2]).decode('ascii')
+            )
 
             # File Size
             file_info[filePath]["size"] = os.stat(filePath).st_size
@@ -181,10 +187,7 @@ def parse_sample_dir(dir, notRecursive=False, generateInfo=False, onlyRelevantEx
             fileName = os.path.basename(filePath)
             folderName = os.path.basename(os.path.dirname(filePath))
             if fileName not in file_info:
-                file_info[fileName] = {}
-                file_info[fileName]["count"] = 0
-                file_info[fileName]["hashes"] = []
-                file_info[fileName]["folder_names"] = []
+                file_info[fileName] = {"count": 0, "hashes": [], "folder_names": []}
             file_info[fileName]["count"] += 1
             file_info[fileName]["hashes"].append(sha256sum)
             if folderName not in file_info[fileName]["folder_names"]:
@@ -194,10 +197,7 @@ def parse_sample_dir(dir, notRecursive=False, generateInfo=False, onlyRelevantEx
             for string in strings:
                 # String is not already known
                 if string not in string_stats:
-                    string_stats[string] = {}
-                    string_stats[string]["count"] = 0
-                    string_stats[string]["files"] = []
-                    string_stats[string]["files_basename"] = {}
+                    string_stats[string] = {"count": 0, "files": [], "files_basename": {}}
                 # String count
                 string_stats[string]["count"] += 1
                 # Add file information
@@ -211,10 +211,7 @@ def parse_sample_dir(dir, notRecursive=False, generateInfo=False, onlyRelevantEx
             for opcode in opcodes:
                 # String is not already known
                 if opcode not in opcode_stats:
-                    opcode_stats[opcode] = {}
-                    opcode_stats[opcode]["count"] = 0
-                    opcode_stats[opcode]["files"] = []
-                    opcode_stats[opcode]["files_basename"] = {}
+                    opcode_stats[opcode] = {"count": 0, "files": [], "files_basename": {}}
                 # opcode count
                 opcode_stats[opcode]["count"] += 1
                 # Add file information
@@ -225,12 +222,21 @@ def parse_sample_dir(dir, notRecursive=False, generateInfo=False, onlyRelevantEx
                     opcode_stats[opcode]["files"].append(filePath)
 
             if args.debug:
-                print("[+] Processed " + filePath + " Size: " + str(size) + " Strings: " + str(len(string_stats)) + \
-                      " OpCodes: " + str(len(opcode_stats)) + " ... ")
+                print(
+                    (
+                        (
+                            f"[+] Processed {filePath} Size: {str(size)} Strings: {len(string_stats)}"
+                            + " OpCodes: "
+                        )
+                        + str(len(opcode_stats))
+                        + " ... "
+                    )
+                )
+
 
         except Exception as e:
             traceback.print_exc()
-            print("[E] ERROR reading file: %s" % filePath)
+            print(f"[E] ERROR reading file: {filePath}")
 
     return string_stats, opcode_stats, file_info
 
@@ -247,7 +253,7 @@ def parse_good_dir(dir, notRecursive=False, onlyRelevantExtensions=True):
         extension = os.path.splitext(filePath)[1].lower()
         if extension not in RELEVANT_EXTENSIONS and onlyRelevantExtensions:
             if args.debug:
-                print("[-] EXTENSION %s - Skipping file %s" % (extension, filePath))
+                print(f"[-] EXTENSION {extension} - Skipping file {filePath}")
             continue
 
         # Size Check
@@ -264,7 +270,7 @@ def parse_good_dir(dir, notRecursive=False, onlyRelevantExtensions=True):
             with open(filePath, 'rb') as f:
                 fileData = f.read()
         except Exception as e:
-            print("[-] Cannot read file - skipping %s" % filePath)
+            print(f"[-] Cannot read file - skipping {filePath}")
 
         # Extract strings from file
         strings = extract_strings(fileData)
@@ -274,7 +280,7 @@ def parse_good_dir(dir, notRecursive=False, onlyRelevantExtensions=True):
         # Extract Opcodes from file
         opcodes = []
         if use_opcodes:
-            print("[-] Extracting OpCodes: %s" % filePath)
+            print(f"[-] Extracting OpCodes: {filePath}")
             opcodes = extract_opcodes(fileData)
             # Append to all opcodes
             all_opcodes.update(opcodes)
@@ -303,13 +309,13 @@ def extract_strings(fileData):
         strings_limited = re.findall(b"[\x1f-\x7e]{6,%d}" % args.s, fileData)
         strings_hex = extract_hex_strings(fileData)
         strings = list(set(strings_full) | set(strings_limited) | set(strings_hex))
-        wide_strings = [ws for ws in re.findall(b"(?:[\x1f-\x7e][\x00]){6,}", fileData)]
+        wide_strings = list(re.findall(b"(?:[\x1f-\x7e][\x00]){6,}", fileData))
 
         # Post-process
         # WIDE
         for ws in wide_strings:
             # Decode UTF16 and prepend a marker (facilitates handling)
-            wide_string = ("UTF16LE:%s" % ws.decode('utf-16')).encode('utf-8')
+            wide_string = f"UTF16LE:{ws.decode('utf-16')}".encode('utf-8')
             if wide_string not in strings:
                 strings.append(wide_string)
         for string in strings:
@@ -330,8 +336,6 @@ def extract_strings(fileData):
         if args.debug:
             print(string)
             traceback.print_exc()
-        pass
-
     return cleaned_strings
 
 
@@ -359,17 +363,15 @@ def extract_opcodes(fileData):
                 # Split text into subs
                 text_parts = re.split(b"[\x00]{3,}", text)
                 # Now truncate and encode opcodes
-                for text_part in text_parts:
-                    if text_part == '' or len(text_part) < 8:
-                        continue
-                    opcodes.append(binascii.hexlify(text_part[:16]))
-                    #print(binascii.hexlify(text_part[:16]))
+                opcodes.extend(
+                    binascii.hexlify(text_part[:16])
+                    for text_part in text_parts
+                    if text_part != '' and len(text_part) >= 8
+                )
 
     except Exception as e:
         if args.debug:
             traceback.print_exc()
-        pass
-
     return opcodes
 
 
@@ -391,8 +393,7 @@ def get_pe_info(fileData):
         # Imphash
         imphash = p.get_imphash()
         # Exports (names)
-        for exp in p.DIRECTORY_ENTRY_EXPORT.symbols:
-            exports.append(exp.name)
+        exports.extend(exp.name for exp in p.DIRECTORY_ENTRY_EXPORT.symbols)
     except Exception as e:
         #if args.debug:
         #    traceback.print_exc()

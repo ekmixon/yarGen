@@ -23,34 +23,29 @@ def getFiles(dir, recursive):
 	if recursive:
 		for root, directories, files in os.walk (dir, followlinks=False):
 			for filename in files:
-				filePath = os.path.join(root,filename)
-				yield filePath
-	# Non recursive
+				yield os.path.join(root,filename)
 	else:
 		for filename in os.listdir(dir):
-			filePath = os.path.join(dir,filename)
-			yield filePath
+			yield os.path.join(dir,filename)
 			
 def parseDir(dir, recursive, numBytes):
 
 	# Prepare dictionary
 	byte_stats = {}
-	
+
 	fileCount = 0
 	for filePath in getFiles(dir, recursive):
-	
+		
 		if os.path.isdir(filePath):
 			if recursive:
 				parseDir(dir, recursive, numBytes)
 			continue
-	
+
 		with open(filePath, 'r') as file:
 			fileCount += 1
 			header = file.read(int(numBytes))
-	
-			pos = 0
-			for byte in header:
-				pos += 1
+
+			for pos, byte in enumerate(header, start=1):
 				if pos in byte_stats:
 					if byte in byte_stats[pos]:
 						byte_stats[pos][byte] += 1
